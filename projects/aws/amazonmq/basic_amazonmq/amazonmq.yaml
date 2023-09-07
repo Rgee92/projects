@@ -1,0 +1,141 @@
+---
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Create an ActiveMQ Instance within a VPC
+
+Parameters:
+
+  AmazonMQBrokerAdminUserPassword:
+    NoEcho: true
+    Type: String
+
+  AmazonMQBrokerEngineVersion:
+    Default: 5.15.10
+    Type: String
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/24
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  PublicInternetRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicSubnetRouteTable
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PrivateSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateSubnet01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/26
+      VpcId: !Ref VPC
+
+  PublicSubnet01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.128/26
+      VpcId: !Ref VPC
+
+  PrivateSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateSubnetRouteTable
+      SubnetId: !Ref PrivateSubnet01
+
+  PublicSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicSubnetRouteTable
+      SubnetId: !Ref PublicSubnet01
+
+  AmazonMQSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: AmazonMQ Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # 8162 allows access to the Web Interface of AmazonMQ
+        - IpProtocol: tcp
+          FromPort: 8162
+          ToPort: 8162
+        - IpProtocol: tcp
+          FromPort: 8162
+          ToPort: 8162
+        # 61617 allows access to the AmazonMQ Queue Service
+        - IpProtocol: tcp
+          FromPort: 61617
+          ToPort: 61617
+      SecurityGroupEgress: []
+
+  AmazonMQBroker:
+    Type: AWS::AmazonMQ::Broker
+    Properties: 
+      AutoMinorVersionUpgrade: false
+      BrokerName: AmazonMQ
+      DeploymentMode: SINGLE_INSTANCE
+      EncryptionOptions: 
+        UseAwsOwnedKey: true
+      EngineType: ACTIVEMQ
+      EngineVersion: !Ref AmazonMQBrokerEngineVersion
+      HostInstanceType: mq.t2.micro
+      Logs: 
+        Audit: true
+        General: true
+      PubliclyAccessible: true
+      SecurityGroups: 
+        - !Ref AmazonMQSecurityGroup
+      SubnetIds:
+        # Specify a single subnet in [SINGLE_INSTANCE] deployment mode.
+        - !Ref PublicSubnet01
+      Users:
+        - ConsoleAccess: true
+          Groups:
+            - Administrators
+          Password: !Ref AmazonMQBrokerAdminUserPassword
+          Username: admin
+
+  AmazonMQConfiguration:
+    Type: AWS::AmazonMQ::Configuration
+    Properties:
+      Data:
+        !Base64 |
+          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <broker schedulePeriodForDestinationPurge="10000" schedulerSupport="true" xmlns="http://activemq.apache.org/schema/core">
+          </broker>
+      Description: !Ref AWS::StackName
+      EngineType: ACTIVEMQ
+      EngineVersion: !Ref AmazonMQBrokerEngineVersion
+      Name: !Ref AWS::StackName
+
+  AmazonMQConfigurationAssociation:
+    Type: AWS::AmazonMQ::ConfigurationAssociation
+    Properties: 
+      Broker: !Ref AmazonMQBroker
+      Configuration: 
+        Id: !Ref AmazonMQConfiguration
+        Revision: !GetAtt AmazonMQConfiguration.Revision
+
+Outputs: {}

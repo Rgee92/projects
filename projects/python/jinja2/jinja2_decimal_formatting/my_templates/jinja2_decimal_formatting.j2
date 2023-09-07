@@ -1,0 +1,8 @@
+All Below are Using jinja2's built in "format" filter from List of Builtin Filters
+http://jinja.pocoo.org/docs/2.9/templates/#builtin-globals
+Use of Use of {:.2f} Results in TypeError: not all arguments converted during string formatting
+Case One: {{ "$%.2f"|format(decimals['case_one']) }}
+Case Two: {{ "$%.2f"|format(decimals['case_two']) }}
+Case Three Rounds up to $10.01 when given 10.006
+Case Three: {{ "$%.2f"|format(decimals['case_three']) }}
+Case Four: {{ "$%.2f"|format(decimals['case_four']) }}
