@@ -1,0 +1,178 @@
+---
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Creates an ECR Repository for the Speech Metrics Application
+
+Parameters: {}
+
+Mappings: {}
+
+Resources:
+
+  SpeechMetricsECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: joey-repo
+      ImageScanningConfiguration:
+        scanOnPush: true
+
+  SpeechMetricsScanNotificationsTopic:
+    Type: AWS::SNS::Topic
+
+  SpeechMetricsScanNotificationsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties: 
+      # email or group email to receive notifications
+      Endpoint: joey@cloudavail.com
+      # FilterPolicy: '{"criticality": ["..."]}'
+      Protocol: email
+      TopicArn: !Ref SpeechMetricsScanNotificationsTopic
+
+  # create event to trigger when scanning is complete
+  SpeechMetricsScanEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: A CloudWatch Event Rule that triggers when each ECR vulnerability image scan is completed.
+      EventPattern:
+        detail-type:
+          - ECR Image Scan
+        source:
+          - aws.ecr
+        resource:
+          - !GetAtt SpeechMetricsECRRepository.Arn
+      State: ENABLED
+      Targets:
+        - Arn:
+            Ref: SpeechMetricsScanNotificationsTopic
+          Id: target-id1
+
+#   SpeechMetricsScanFindingEvent:
+#     Type: AWS::Events::Rule
+#     Properties:
+#       Description: Findings from SpeechMetrics Image Scans
+#       EventPattern:
+#         source:
+#         - 'aws.ecr'
+#         'detail-type':
+#         - 'ECR Image Scan'
+#         detail:
+#           finding-severity-counts:
+#             CRITICAL: [{exists: true}, {numeric: ['>', 0]}]
+#             HIGH: [{exists: true}, {numeric: ['>', 0]}]
+#             MEDIUM: [{exists: false}, {numeric: ['>', 0]}]
+#             UNDEFINED: [{exists: false}, {numeric: ['>', 0]}]
+#       State: ENABLED
+#       Targets:
+#       - Arn:
+#           Ref: SpeechMetricsScanNotificationsTopic
+#         Id: target-id2
+
+  # SpeechMetricsScanCriticalFindingEvent:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: Critical Findings Count from SpeechMetrics Image Scan
+  #     EventPattern:
+  #       source:
+  #       - 'aws.ecr'
+  #       'detail-type':
+  #       - 'ECR Image Scan'
+  #       detail:
+  #         finding-severity-counts:
+  #           CRITICAL: [{exists: true}, {numeric: ['>', 0]}]
+  #     State: ENABLED
+  #     Targets:
+  #     - Arn:
+  #         Ref: SpeechMetricsScanNotificationsTopic
+  #       Id: CRITICAL
+# 
+  # SpeechMetricsScanHighFindingEvent:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: High Findings Count from SpeechMetrics Image Scan
+  #     EventPattern:
+  #       source:
+  #       - 'aws.ecr'
+  #       'detail-type':
+  #       - 'ECR Image Scan'
+  #       detail:
+  #         finding-severity-counts:
+  #           HIGH: [{exists: true}, {numeric: ['>', 0]}]
+  #     State: ENABLED
+  #     Targets:
+  #     - Arn:
+  #         Ref: SpeechMetricsScanNotificationsTopic
+  #       Id: HIGH
+# 
+  # SpeechMetricsScanMediumFindingEvent:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: Medium Findings Count from SpeechMetrics Image Scan
+  #     EventPattern:
+  #       source:
+  #       - 'aws.ecr'
+  #       'detail-type':
+  #       - 'Medium Vulnerabilities Found'
+  #       detail:
+  #         finding-severity-counts:
+  #           MEDIUM: 
+  #             - '*'
+  #     State: ENABLED
+  #     Targets:
+  #     - Arn:
+  #         Ref: SpeechMetricsScanNotificationsTopic
+  #       Id: MEDIUM
+# 
+  # SpeechMetricsScanLowFindingEvent:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: Low Findings Count from SpeechMetrics Image Scan
+  #     EventPattern:
+  #       source:
+  #       - 'aws.ecr'
+  #       'detail-type':
+  #       - 'ECR Image Scan'
+  #       detail:
+  #         finding-severity-counts:
+  #           LOW: [{exists: true}, {numeric: ['>', 0]}]
+  #     State: ENABLED
+  #     Targets:
+  #     - Arn:
+  #         Ref: SpeechMetricsScanNotificationsTopic
+  #       Id: LOW
+
+  SpeechMetricsScanNotificationsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - 'SNS:GetTopicAttributes'
+              - 'SNS:SetTopicAttributes'
+              - 'SNS:AddPermission'
+              - 'SNS:RemovePermission'
+              - 'SNS:DeleteTopic'
+              - 'SNS:Subscribe'
+              - 'SNS:ListSubscriptionsByTopic'
+              - 'SNS:Publish'
+              - 'SNS:Receive'
+            Resource:
+              Ref: SpeechMetricsScanNotificationsTopic
+            Condition:
+              StringEquals:
+                'AWS:SourceOwner':
+                  Ref: 'AWS::AccountId'
+          - Sid: TrustCWEToPublishEventsToMyTopic
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sns:Publish'
+            Resource:
+              Ref: SpeechMetricsScanNotificationsTopic
+      Topics:
+        - Ref: SpeechMetricsScanNotificationsTopic
+
+Outputs: {}

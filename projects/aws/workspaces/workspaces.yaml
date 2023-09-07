@@ -1,0 +1,70 @@
+---
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: AWS Workspaces build template
+
+Parameters:
+
+  Environment: 
+    Type: String
+    AllowedValues:
+      - prod
+      - dev
+
+  WorkspaceBundleType:
+    Type: String
+    Description: Type of Workspace Bundle to deploy # For Windows workspaces, 
+    AllowedValues:
+      - wsb-clj85qzj1 # Amazon Linux 2 with PCoIP 2 vCPU 4GiB Memory 50GB Storage
+      - wsb-2bs6k5lgn # Amazon Linux 2 with PCoIP 4 vCPU 16GiB Memory 100GB Storage
+      - wsb-j4dky1gs4 # Amazon Linux 2 with PCoIP 2 vCPU 7.5GiB Memory 100GB Storage
+      - wsb-8pmj7b7pq # Amazon Linux 2 with PCoIP 1 vCPU 2GiB Memory 10GB Storage
+      - wsb-b1h39vgz8 # Amazon Linux 2 with PCoIP 8 vCPU 32GiB Memory 100GB Storage
+    Default: wsb-clj85qzj1
+
+Mappings: 
+  Environment:
+    dev:
+      VpcId: vpc-0ab6ceb0bb1b7d37d
+      SubnetIds:
+        # NAT Subnets - this is where a Directory Server and DNS server will be launched
+        - subnet-04d3bec1ac28ebc88
+        - subnet-097c6220e365c0561
+
+Resources:
+
+  CloudAvailDirectoryService:
+    Type: AWS::DirectoryService::SimpleAD
+    Properties: 
+      CreateAlias: true
+      Description: CloudAvail Directory Service
+      EnableSso: Yes
+      Name: corp.cloudavail.com
+      Password: '{{resolve:ssm-secure:/admin/directoryservice/directory/corp.cloudavail.com/password}}'
+      ShortName: CORP
+      Size: Small
+      VpcSettings: 
+        SubnetIds: !FindInMap [ Environment , !Ref Environment , SubnetIds ]
+        VpcId: !FindInMap [ Environment , !Ref Environment , VpcId ]
+
+  CloudAvailWorkspace:
+    Type: AWS::WorkSpaces::Workspace
+    Properties: 
+      # BundleId is type of Workspace to build
+      BundleId: !Ref WorkspaceBundleType
+      DirectoryId: !Ref CloudAvailDirectoryService
+      RootVolumeEncryptionEnabled: false
+      Tags: 
+        - Key: Application
+          Value: Speechmetrics
+        - Key: Environment
+          Value: !Sub ${Environment}
+      UserName: joey.ancheta
+      UserVolumeEncryptionEnabled: false
+      # VolumeEncryptionKey: String
+      WorkspaceProperties: 
+        RunningMode: AUTO_STOP
+        RunningModeAutoStopTimeoutInMinutes: 60
+
+Outputs: {}
